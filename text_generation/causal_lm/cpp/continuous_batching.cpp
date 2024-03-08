@@ -3,6 +3,8 @@
 
 #include <openvino/openvino.hpp>
 
+#include <chrono>
+
 namespace {
 
 template <typename T>
@@ -291,8 +293,8 @@ public:
 
         const size_t BLOCK_SIZE = 16, X = BLOCK_SIZE / kv_cache_precision.size();
         // TODO: take from model
-        constexpr size_t NUM_KV_HEADS = 12, NUM_HEADS = 12, HIDDEN_DIMS = 768, HEAD_SIZE = HIDDEN_DIMS / NUM_HEADS;
-        constexpr size_t NUM_DECODER_LAYERS = 12; // num KV cache pairs
+        constexpr size_t NUM_KV_HEADS = 32, NUM_HEADS = 32, HIDDEN_DIMS = 4096, HEAD_SIZE = HIDDEN_DIMS / NUM_HEADS;
+        constexpr size_t NUM_DECODER_LAYERS = 32; // num KV cache pairs
 
         // Set PagedAttention specific parameters
 
@@ -469,55 +471,74 @@ int main(int argc, char* argv[]) try {
     ov::InferRequest detokenizer = core.compile_model(
         std::string{argv[1]} + "/openvino_detokenizer.xml", "CPU").create_infer_request();
     // The model can be compiled for GPU as well
-    std::shared_ptr<ov::Model> model = core.read_model(std::string{argv[1]} + "/vllm_optimum_openvino_model.xml");
-    ov::InferRequest request = core.compile_model(model, "CPU").create_infer_request();
+    std::shared_ptr<ov::Model> model = core.read_model(std::string{argv[1]} + "/vllm_optimum_openvino_model_llama2.xml");
 
-    //
-    // Create sequences
-    //
+    auto run_benchmark = [&] (size_t input_len, size_t output_len, size_t num_prompts, size_t max_tokens_to_batch) {
+        ov::InferRequest request = core.compile_model(model, "CPU").create_infer_request();
 
-    std::vector<std::string> prompts = {
-        "What is OpenVINO?",
-        "How are you?",
-        "What is the current time",
-        "What is OpenVINO?",
+        //
+        // Create sequences
+        //
+
+        std::string prompt, prompt_base = "hi";
+
+        for (size_t i = 1; i < input_len; ++i)
+            prompt += prompt_base;
+
+        std::vector<Sequence> sequences;
+        sequences.reserve(num_prompts);
+
+        for (size_t i = 0; i < num_prompts; ++i) {
+            auto [input_ids, attention_mask] = tokenize(tokenizer, prompt);
+            sequences.push_back(Sequence(input_ids, output_len));
+        }
+
+        //
+        // Perform the first inference
+        //
+
+        SchedulerConfig scheduler_config {
+            .max_tokens_to_batch = max_tokens_to_batch,
+            .num_kv_blocks = NUM_BLOCKS
+        };
+
+        Scheduler scheduler(scheduler_config);
+        ModelRunner llm_model(request);
+        Sampler sampler;
+
+        // generation loop
+        {
+            std::cout << "Input len " << input_len << ", output_len " << output_len << ", batch_size " << max_tokens_to_batch << ", num_prompts " << num_prompts << std::endl;
+            auto start = std::chrono::steady_clock::now();
+
+            while (has_unfinished_sequences(sequences)) {
+                scheduler.schedule(sequences);
+                ov::Tensor logits = llm_model.infer(sequences);
+                sampler.decode(sequences, logits);
+            }
+
+            auto end = std::chrono::steady_clock::now();
+            auto seconds = std::chrono::duration<double, std::milli>(end - start).count() / 1000.;
+            std::cout << "Tput: " << (num_prompts * sequences[0].get_context_len()) / seconds << " tokens / sec" << std::endl << std::endl;
+        }
+
+        // print results
+        for (size_t i = 0; i < sequences.size(); ++i) {
+            const Sequence & sequence = sequences[i];
+            OPENVINO_ASSERT(sequence.get_generated_ids().size() == output_len);
+            // std::cout << "Question: " << detokenize(detokenizer, sequence.get_prompt_ids()) << std::endl
+            //           << "Answer: " << detokenize(detokenizer, sequence.get_generated_ids()) << std::endl << std::endl;
+        }
     };
 
-    std::vector<Sequence> sequences;
-    size_t dataset_size = 30;
-    sequences.reserve(dataset_size);
+    std::vector<size_t> input_lens = { 64, 128 };
+    std::vector<size_t> num_prompts = { 8, 64 };
+    std::vector<size_t> max_batch_size = { /* 8, 16, 32, 64, 128, */ 256, 512, 1024, 2048, 4096 };
 
-    for (size_t i = 0; i < dataset_size; ++i) {
-        auto [input_ids, attention_mask] = tokenize(tokenizer, prompts[i % prompts.size()]);
-        sequences.push_back(Sequence(input_ids));
-    }
-
-    //
-    // Perform the first inference
-    //
-
-    SchedulerConfig scheduler_config {
-        .max_tokens_to_batch = 16,
-        .num_kv_blocks = NUM_BLOCKS
-    };
-
-    Scheduler scheduler(scheduler_config);
-    ModelRunner llm_model(request);
-    Sampler sampler;
-
-    while (has_unfinished_sequences(sequences)) {
-        scheduler.schedule(sequences);
-        ov::Tensor logits = llm_model.infer(sequences);
-        sampler.decode(sequences, logits);
-        std::cout << std::endl;
-    }
-
-    // print results
-    for (size_t i = 0; i < sequences.size(); ++i) {
-        const Sequence & sequence = sequences[i];
-        std::cout << "Question: " << detokenize(detokenizer, sequence.get_prompt_ids()) << std::endl
-                  << "Answer: " << detokenize(detokenizer, sequence.get_generated_ids()) << std::endl << std::endl;
-    }
+    for (size_t len : input_lens)
+        for (size_t n_prompts : num_prompts)
+            for (size_t max_bt : max_batch_size)
+                run_benchmark(len, len, n_prompts, max_bt);
 
 } catch (const std::exception& error) {
     std::cerr << error.what() << '\n';
