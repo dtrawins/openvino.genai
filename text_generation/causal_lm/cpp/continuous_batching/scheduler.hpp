@@ -174,6 +174,8 @@ private:
                 size_t num_running_seqs = sequence_group->num_running_seqs();
                 // prompt phases can have a single running sequence
                 OPENVINO_ASSERT(num_running_seqs == 1);
+                Sequence::Ptr sequence = (*sequence_group)[0];
+                uint64_t seq_id = sequence->get_id();
 
                 size_t num_tokens_in_megabatch = m_config.max_num_batched_tokens - scheduler_output.m_total_num_scheduled_tokens;
                 size_t num_available_tokens = sequence_group->get_num_available_tokens_for_batching();
@@ -183,7 +185,9 @@ private:
 
                 // apply KV cache limitations
                 size_t context_len = sequence_group->get_context_len();
-                size_t available_slots = context_len % BLOCK_SIZE, required_slots = num_scheduled_tokens - available_slots;
+                size_t has_allocated_blocks = sequence_group->get_num_processed_tokens() > 0;
+                size_t available_slots = has_allocated_blocks ? BLOCK_SIZE - (context_len % BLOCK_SIZE) : 0,
+                       required_slots = num_scheduled_tokens > available_slots ? num_scheduled_tokens - available_slots : 0;
                 size_t num_required_blocks = (required_slots + BLOCK_SIZE - 1) / BLOCK_SIZE, num_free_blocks = m_block_manager.num_free_blocks();
                 size_t num_scheduled_blocks = std::min(num_required_blocks, num_free_blocks);
                 // some scheduled blocks can be no fully occupied, so we need to take min between num_scheduled_blocks
@@ -191,11 +195,9 @@ private:
                 num_scheduled_tokens = std::min(num_scheduled_tokens, available_slots + num_scheduled_blocks * BLOCK_SIZE);
 
                 if (num_scheduled_tokens > 0) {
-                    Sequence::Ptr sequence = (*sequence_group)[0];
-                    uint64_t seq_id = sequence->get_id();
-
-                    // allocate KV blocks
-                    m_block_manager.allocate(seq_id, num_scheduled_blocks);
+                    // allocate KV blocks if required
+                    if (num_scheduled_blocks > 0)
+                        m_block_manager.allocate(seq_id, num_scheduled_blocks);
                     // and schedule tokens
                     sequence_group->schedule_tokens(num_scheduled_tokens);
 
