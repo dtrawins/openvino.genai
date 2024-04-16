@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#include "openvino/op/op.hpp"
+#include <openvino/op/op.hpp>
 
 class PagedAttention : public ov::op::Op {
 public:

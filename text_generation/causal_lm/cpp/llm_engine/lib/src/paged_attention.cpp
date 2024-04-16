@@ -4,12 +4,12 @@
 
 #include "paged_attention.hpp"
 
-#include "openvino/op/scaled_dot_product_attention.hpp"
-#include "openvino/op/parameter.hpp"
-#include "openvino/op/constant.hpp"
-#include "openvino/op/result.hpp"
-#include "openvino/op/transpose.hpp"
-#include "openvino/runtime/core.hpp"
+#include <openvino/op/scaled_dot_product_attention.hpp>
+#include <openvino/op/parameter.hpp>
+#include <openvino/op/constant.hpp>
+#include <openvino/op/result.hpp>
+#include <openvino/op/transpose.hpp>
+#include <openvino/runtime/core.hpp>
 
 PagedAttention::PagedAttention(const ov::OutputVector& inputs)
     : ov::op::Op(inputs) {

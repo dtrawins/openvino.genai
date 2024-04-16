@@ -7,7 +7,7 @@
 #include <cstdlib>
 #include <limits>
 
-#include "openvino/runtime/tensor.hpp"
+#include <openvino/runtime/tensor.hpp>
 
 #include "scheduler.hpp"
 #include "sequence_group.hpp"
