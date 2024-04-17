@@ -16,3 +16,8 @@ find_package(OpenVINO REQUIRED COMPONENTS Runtime)
 target_link_libraries(casual_lm PRIVATE openvino::runtime)
 set_target_properties(casual_lm PROPERTIES CXX_STANDARD 20)
 set_target_properties(casual_lm PROPERTIES CXX_STANDARD_REQUIRED ON)
+
+install(TARGETS casual_lm         
+        ARCHIVE DESTINATION lib
+        LIBRARY DESTINATION lib
+        RUNTIME DESTINATION bin )
