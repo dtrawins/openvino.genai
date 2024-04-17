@@ -16,8 +16,10 @@ find_package(OpenVINO REQUIRED COMPONENTS Runtime)
 target_link_libraries(causal_lm PRIVATE openvino::runtime)
 set_target_properties(causal_lm PROPERTIES CXX_STANDARD 20)
 set_target_properties(causal_lm PROPERTIES CXX_STANDARD_REQUIRED ON)
+set_target_properties(causal_lm PROPERTIES PUBLIC_HEADER "include/llm_engine.hpp")
 
 install(TARGETS causal_lm         
         ARCHIVE DESTINATION lib
         LIBRARY DESTINATION lib
-        RUNTIME DESTINATION bin )
+        RUNTIME DESTINATION bin 
+        PUBLIC_HEADER DESTINATION include)
