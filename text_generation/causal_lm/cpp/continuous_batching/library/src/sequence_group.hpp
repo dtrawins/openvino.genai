@@ -6,7 +6,9 @@
 #include <vector>
 #include <cstdlib>
 
+#include "generation_handle.hpp"
 #include "generation_config.hpp"
+#include "generation_stream.hpp"
 
 enum class SequenceStatus {
     RUNNING = 0,
@@ -14,39 +16,45 @@ enum class SequenceStatus {
 };
 
 using TokenIds = std::vector<int64_t>;
+using IterationOutput = std::pair<int64_t, int64_t>;
 
 class Sequence {
     static uint64_t _get_next_sequence_id() {
-        static uint64_t m_counter = 0;
+        static uint64_t m_counter = 1; // 0 reserved as a special value
         return m_counter++;
     }
 
     TokenIds m_generated_ids;
+    uint64_t m_parent_id = 0;
     uint64_t m_id = _get_next_sequence_id();
     SequenceStatus m_status = SequenceStatus::RUNNING;
     float m_cumulative_log_prob = 0.0f;
+    GenerationStream::Ptr m_generation_stream;
 
 public:
     using Ptr = std::shared_ptr<Sequence>;
     using CPtr = std::shared_ptr<const Sequence>;
 
     // don't use directly
-    Sequence() = default;
+    Sequence(GenerationStream::Ptr generation_stream) :
+    m_generation_stream(generation_stream) {}
 
     // don't use directly
-    Sequence(const Sequence& seq) :
+    Sequence(const Sequence& seq, GenerationStream::Ptr generation_stream) :
         m_generated_ids(seq.m_generated_ids),
+        m_parent_id(seq.m_id),
         m_status(seq.m_status),
-        m_cumulative_log_prob(seq.m_cumulative_log_prob) {
+        m_cumulative_log_prob(seq.m_cumulative_log_prob),
+        m_generation_stream(generation_stream) {
         OPENVINO_ASSERT(seq.m_id != m_id);
     }
 
-    static Sequence::Ptr create() {
-        return std::make_shared<Sequence>();
+    static Sequence::Ptr create(GenerationStream::Ptr generation_stream) {
+        return std::make_shared<Sequence>(generation_stream);
     }
 
-    static Sequence::Ptr fork(Sequence::CPtr sequence) {
-        return std::make_shared<Sequence>(*sequence);
+    static Sequence::Ptr fork(Sequence::CPtr sequence, GenerationStream::Ptr generation_stream) {
+        return std::make_shared<Sequence>(*sequence, generation_stream);
     }
 
     bool operator ==(const Sequence& other) const {
@@ -73,6 +81,14 @@ public:
     void append_token(int64_t token_id, float log_prob) {
         m_cumulative_log_prob += log_prob;
         m_generated_ids.push_back(token_id);
+    }
+
+    GenerationOutput get_last_generation_output() {
+        GenerationOutput output;
+        output.parent_id = m_parent_id;
+        output.cumulative_log_prob = m_cumulative_log_prob;
+        output.token_id = m_generated_ids[m_generated_ids.size()-1];
+        return output;
     }
 
     size_t get_generated_len() const {
@@ -110,6 +126,7 @@ class SequenceGroup {
     GenerationConfig m_sampling_params;
     std::size_t m_block_size;
     TokenIds m_prompt_ids;
+    GenerationStream::Ptr m_generation_stream;
  
     // amount of processed tokens, e.g. prompt can be processed using multiple consequence inferences
     // so, we need to track which part of the prompt we have already processed
@@ -122,7 +139,9 @@ class SequenceGroup {
     SequenceGroup(uint64_t request_id, const GenerationConfig& sampling_params, std::size_t block_size)
         : m_request_id(request_id),
           m_sampling_params(sampling_params),
-          m_block_size(block_size) { }
+          m_block_size(block_size) {
+            m_generation_stream = GenerationStream::create();    
+           }
 public:
     using Ptr = std::shared_ptr<SequenceGroup>;
     using CPtr = std::shared_ptr<const SequenceGroup>;
@@ -133,7 +152,7 @@ public:
 
     SequenceGroup(uint64_t request_id, const ov::Tensor input_ids, const GenerationConfig& sampling_params, std::size_t block_size)
         : SequenceGroup(request_id, sampling_params, block_size) {
-        add_sequence(Sequence::create());
+        add_sequence(Sequence::create(m_generation_stream));
 
         m_prompt_ids.resize(input_ids.get_size());
         std::copy_n(input_ids.data<int64_t>(), input_ids.get_size(), m_prompt_ids.begin());
@@ -310,7 +329,7 @@ public:
     }
 
     Sequence::Ptr fork_sequence(Sequence::CPtr sequence) {
-        m_sequences.emplace_back(Sequence::fork(sequence));
+        m_sequences.emplace_back(Sequence::fork(sequence, m_generation_stream));
         return m_sequences.back();
     }
 
@@ -335,5 +354,24 @@ public:
         if (m_sequences[0]->get_generated_len() > 0 || m_sequences[0]->get_cumulative_log_probs() != 0.0f)
             return false;
         return true; 
+    }
+    
+    GenerationStream::Ptr get_generation_stream() {
+        return m_generation_stream;
+    }
+
+    void finish_generation_stream() {
+        m_generation_stream->finish_generation_stream();
+    }
+
+    void notify_handle() {
+        GenerationOutputs outputs;
+        for (auto& sequence : m_sequences) {
+            if (sequence->get_generated_len() > 0) {
+                outputs.emplace(sequence->get_id(), sequence->get_last_generation_output());
+            }
+        }
+        if (outputs.size())
+            m_generation_stream->push(outputs);
     }
 };

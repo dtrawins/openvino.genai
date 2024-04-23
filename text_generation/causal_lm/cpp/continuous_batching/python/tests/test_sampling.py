@@ -133,6 +133,15 @@ def run_continuous_batching(
     pipe = ContinuousBatchingPipeline(model_path.absolute().as_posix(), scheduler_config)
     return pipe.generate(prompts, generation_configs)
 
+def run_continuous_batching2(
+    model_path : Path,
+    scheduler_config : SchedulerConfig,
+    prompts: List[str],
+    generation_configs : List[GenerationConfig]
+) -> List[GenerationResult]:
+    pipe = ContinuousBatchingPipeline(model_path.absolute().as_posix(), scheduler_config)
+    return pipe.generate2(prompts, generation_configs)
+
 # tested models:
 # - facebook/opt-125m
 # - meta-llama/Llama-2-7b-chat-hf
@@ -149,19 +158,27 @@ def test_preemption(tmp_path, scheduler_params):
 
     (hf_results, model_path) = run_hugging_face(model_id=model_id, prompts=prompts, generation_configs=generation_configs, tmp_path=tmp_path, use_optimum=True)
     my_results : List[GenerationResult] = run_continuous_batching(model_path, scheduler_config, prompts, generation_configs)
+    my_results2 : List[GenerationResult] = run_continuous_batching(model_path, scheduler_config, prompts, generation_configs)
 
     assert len(prompts) == len(hf_results)
     assert len(prompts) == len(my_results)
+    assert len(prompts) == len(my_results2)
 
-    for prompt, hf_result, my_result, generation_config in zip(prompts, hf_results, my_results, generation_configs):
+    for prompt, hf_result, my_result, my_result2, generation_config in zip(prompts, hf_results, my_results, my_results2, generation_configs):
         print(f"Prompt = {prompt}\nHF result = {hf_result}\nmy result = {my_result}")
 
         if generation_config.is_beam_search:
             assert len(hf_result.m_scores) == len(my_result.m_scores)
-            for hf_score, my_score in zip(hf_result.m_scores, my_result.m_scores):
+            assert len(hf_result.m_scores) == len(my_result2.m_scores)
+            for hf_score, my_score, my_score2 in zip(hf_result.m_scores, my_result.m_scores, my_result2.m_scores):
                 # Note, that for fp32 / fp16 models scores are different less than 0.001
                 assert abs(hf_score - my_score) < 0.02
+                assert abs(hf_score - my_score2) < 0.02
 
         assert len(hf_result.m_generation_ids) == len(my_result.m_generation_ids)
         for hf_text, my_text in zip(hf_result.m_generation_ids, my_result.m_generation_ids):
+            assert hf_text == my_text
+
+        assert len(hf_result.m_generation_ids) == len(my_result2.m_generation_ids)
+        for hf_text, my_text in zip(hf_result.m_generation_ids, my_result2.m_generation_ids):
             assert hf_text == my_text

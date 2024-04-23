@@ -5,6 +5,7 @@
 #include <cxxopts.hpp>
 
 #include "continuous_batching_pipeline.hpp"
+#include "tokenizer.hpp"
 
 int main(int argc, char* argv[]) try {
     // Command line options
@@ -75,11 +76,11 @@ int main(int argc, char* argv[]) try {
     };
 
     ContinuousBatchingPipeline pipe(models_path, scheduler_config);
-    std::vector<GenerationResult> generation_results = pipe.generate(prompts, sampling_params);
+    std::cout << "New output:" << std::endl;
+    std::vector<GenerationResult> generation_results = pipe.generate2(prompts, sampling_params);
 
     for (size_t request_id = 0; request_id < generation_results.size(); ++request_id) {
         const GenerationResult & generation_result = generation_results[request_id];
-
         std::cout << "Question: " << prompts[request_id] << std::endl;
         for (size_t output_id = 0; output_id < generation_result.m_generation_ids.size(); ++output_id) {
             std::cout << "Answer " << output_id << " (" << generation_result.m_scores[output_id] << ") : " << generation_result.m_generation_ids[output_id] << std::endl;
@@ -87,6 +88,18 @@ int main(int argc, char* argv[]) try {
         std::cout << std::endl;
     }
 
+    pipe = ContinuousBatchingPipeline(models_path, scheduler_config);
+    std::cout << "Original output:" << std::endl;
+    generation_results = pipe.generate(prompts, sampling_params);
+
+    for (size_t request_id = 0; request_id < generation_results.size(); ++request_id) {
+        const GenerationResult & generation_result = generation_results[request_id];
+        std::cout << "Question: " << prompts[request_id] << std::endl;
+        for (size_t output_id = 0; output_id < generation_result.m_generation_ids.size(); ++output_id) {
+            std::cout << "Answer " << output_id << " (" << generation_result.m_scores[output_id] << ") : " << generation_result.m_generation_ids[output_id] << std::endl;
+        }
+        std::cout << std::endl;
+    }
 } catch (const std::exception& error) {
     std::cerr << error.what() << '\n';
     return EXIT_FAILURE;

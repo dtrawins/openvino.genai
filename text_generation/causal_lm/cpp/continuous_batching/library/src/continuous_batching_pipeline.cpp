@@ -115,7 +115,7 @@ public:
         return m_tokenizer;
     }
 
-    void add_request(uint64_t request_id, std::string prompt, GenerationConfig sampling_params) {
+    GenerationHandle add_request(uint64_t request_id, std::string prompt, GenerationConfig sampling_params) {
         if (sampling_params.eos_token_id < 0) {
             sampling_params.eos_token_id = m_tokenizer->get_eos_token_id();
         } else {
@@ -135,6 +135,7 @@ public:
         SequenceGroup::Ptr sequence_group = std::make_shared<SequenceGroup>(request_id, input_ids,
                                                                             sampling_params, m_scheduler->get_config().block_size);
         m_requests.push_back(sequence_group);
+        return GenerationHandle(sequence_group->get_generation_stream(), sampling_params);
     }
 
     std::vector<GenerationResult> step() {
@@ -205,9 +206,16 @@ public:
 
             for (size_t i = 0; i < scheduler_output.m_scheduled_sequence_groups_ids.size(); ++i) {
                 uint64_t seq_group_id = scheduler_output.m_scheduled_sequence_groups_ids[i];
-                SequenceGroup::CPtr sequence_group = m_requests[seq_group_id];
+                SequenceGroup::Ptr sequence_group = m_requests[seq_group_id];
+                {
+                    static ManualTimer timer("notify handle");
+                    timer.start();
+                    sequence_group->notify_handle();
+                    timer.end();
+                }
                 if (sequence_group->has_finished()) {
                    currently_finished_requests.push_back(from_sequence_group(m_tokenizer, sequence_group));
+                   sequence_group->finish_generation_stream();
                 }
             }
 
@@ -248,6 +256,38 @@ public:
         OPENVINO_ASSERT(results.size() == prompts.size());
         return results;
     }
+
+    std::vector<GenerationResult> generate2(const std::vector<std::string> prompts, std::vector<GenerationConfig> sampling_params) {
+        OPENVINO_ASSERT(!has_running_requests(), "Generate cannot be called while ContinuousBatchingPipeline is already in running state. Use ContinuousBatchingPipeline::add_request");
+        OPENVINO_ASSERT(prompts.size() == sampling_params.size());
+
+        std::vector<GenerationHandle> generations;
+        for (size_t request_id = 0; request_id < prompts.size(); ++request_id) {
+            generations.push_back(add_request(request_id, prompts[request_id], sampling_params[request_id]));
+        }
+
+        std::vector<GenerationResult> results;
+        results.reserve(m_requests.size());
+
+        while (has_running_requests()) {
+            step();
+        }
+
+        for (auto& generation : generations) {
+            GenerationResult result;
+            result.m_request_id = 1;
+            std::vector<GenerationRawResult> raw_results = generation.read_all();
+            for (auto& raw_result : raw_results) {
+                std::string output_text = m_tokenizer->decode(raw_result.generated_token_ids);
+                result.m_generation_ids.push_back(output_text);
+                result.m_scores.push_back(raw_result.cumulative_log_prob);
+            }
+            results.push_back(result);
+        }
+
+        OPENVINO_ASSERT(results.size() == prompts.size());
+        return results;
+    }
 };
 
 ContinuousBatchingPipeline::ContinuousBatchingPipeline(const std::string& models_path,
@@ -263,7 +303,7 @@ GenerationConfig ContinuousBatchingPipeline::get_config() const{
     return m_impl->get_config();
 }
 
-void ContinuousBatchingPipeline::add_request(uint64_t request_id, std::string prompt, GenerationConfig sampling_params) {
+GenerationHandle ContinuousBatchingPipeline::add_request(uint64_t request_id, std::string prompt, GenerationConfig sampling_params) {
     return m_impl->add_request(request_id, prompt, sampling_params);
 }
 
@@ -277,4 +317,9 @@ bool ContinuousBatchingPipeline::has_running_requests() const {
 
 std::vector<GenerationResult> ContinuousBatchingPipeline::generate(const std::vector<std::string>& prompts, std::vector<GenerationConfig> sampling_params) {
     return m_impl->generate(prompts, sampling_params);
+}
+
+
+std::vector<GenerationResult> ContinuousBatchingPipeline::generate2(const std::vector<std::string>& prompts, std::vector<GenerationConfig> sampling_params) {
+    return m_impl->generate2(prompts, sampling_params);
 }
