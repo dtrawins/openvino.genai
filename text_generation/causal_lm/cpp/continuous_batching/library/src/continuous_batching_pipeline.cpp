@@ -280,7 +280,7 @@ public:
             for (auto& raw_result : raw_results) {
                 std::string output_text = m_tokenizer->decode(raw_result.generated_token_ids);
                 result.m_generation_ids.push_back(output_text);
-                result.m_scores.push_back(raw_result.cumulative_log_prob);
+                result.m_scores.push_back(raw_result.score);
             }
             results.push_back(result);
         }

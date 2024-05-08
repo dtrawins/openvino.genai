@@ -28,11 +28,11 @@ void add_output_chunk(std::vector<std::vector<int64_t>>& outputs_chunks, std::ve
 
 struct IntermediateResult {
     std::vector<uint32_t> output_chunks_indexes;
-    float cumulative_log_prob;
+    float latest_score;
 
-    IntermediateResult(const std::vector<uint32_t>& output_chunks_indexes, const float cumulative_log_prob) :
+    IntermediateResult(const std::vector<uint32_t>& output_chunks_indexes, const float latest_score) :
     output_chunks_indexes(output_chunks_indexes),
-    cumulative_log_prob(cumulative_log_prob) {}
+    latest_score(latest_score) {}
 };
 
 std::vector<GenerationRawResult> GenerationHandle::read_all() {
@@ -55,7 +55,7 @@ std::vector<GenerationRawResult> GenerationHandle::read_all() {
             for (auto& result : iteration_results) {
                 std::vector<uint32_t> output_chunks_indexes;
                 add_output_chunk(outputs_chunks, output_chunks_indexes, result.second.token_id, m_sampling_params.max_new_tokens);
-                IntermediateResult intermediate_result{output_chunks_indexes, result.second.cumulative_log_prob};
+                IntermediateResult intermediate_result{output_chunks_indexes, result.second.latest_score};
                 intermediate_results.emplace(result.first, intermediate_result);
             }
             last_iteration_results = iteration_results;
@@ -75,7 +75,7 @@ std::vector<GenerationRawResult> GenerationHandle::read_all() {
                     forked_sequences_ids.emplace(generation_output.parent_id);
                 }
                 add_output_chunk(outputs_chunks, output_chunks_indexes, generation_output.token_id, m_sampling_params.max_new_tokens);
-                IntermediateResult intermediate_result{output_chunks_indexes, result.second.cumulative_log_prob};
+                IntermediateResult intermediate_result{output_chunks_indexes, result.second.latest_score};
                 new_sequences.emplace(sequence_id, intermediate_result);
             }
         }
@@ -116,7 +116,7 @@ std::vector<GenerationRawResult> GenerationHandle::read_all() {
         for (uint32_t output_chunk_index: intermediate_result.second.output_chunks_indexes) {
             sequence_tokens->insert(sequence_tokens->end(), outputs_chunks[output_chunk_index].begin(), outputs_chunks[output_chunk_index].end());
         }
-        results[result_index].cumulative_log_prob = intermediate_result.second.cumulative_log_prob;
+        results[result_index].score = intermediate_result.second.latest_score;
     }
     return results;
 }

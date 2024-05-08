@@ -11,12 +11,12 @@
 struct GenerationOutput {
     uint64_t parent_id = 0;
     int64_t token_id;
-    float cumulative_log_prob;
+    float latest_score;
 };
 
 struct GenerationRawResult {
     std::vector<int64_t> generated_token_ids;
-    float cumulative_log_prob;
+    float score;
 };
 
 using GenerationOutputs = std::unordered_map<uint64_t, GenerationOutput>;
