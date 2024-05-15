@@ -241,9 +241,10 @@ class GenerationInfoCollector {
     std::vector<GenerationInfo> generations_info;
     size_t num_finished = 0;
     std::chrono::steady_clock::time_point start_time;
+    
 
 public:
-
+    bool gatherStatistics = true;
     void set_start_time(std::chrono::steady_clock::time_point start_time) {
         this->start_time = start_time;
     }
@@ -349,16 +350,26 @@ void llmEngineLoop(ContinuousBatchingPipeline* pipe, Dataset* dataset) {
 
 void statisticsReporter(GenerationInfoCollector* generations_info_collector, int num_prompts) {
     int num_finished = 0;
-    while (num_finished < num_prompts) {
-        num_finished = generations_info_collector->run();
+    if (generations_info_collector->gatherStatistics) {
+        while (num_finished < num_prompts) {
+            num_finished = generations_info_collector->run();
+        }
+        std::cout << "Benchmark finished, summarizing statistics..." << std::endl;
+        generations_info_collector->print_statistics();
     }
-    std::cout << "Benchmark finished, summarizing statistics..." << std::endl;
-    generations_info_collector->print_statistics();
-
     std::cout << "Exiting statistics reporter thread." << std::endl;
 }
 
 }  // namespace
+
+void printDefaultStatistics(double total_time_in_ms, Dataset& dataset) {
+    std::cout << "Total input tokens: " << dataset.m_total_input_len << std::endl;
+    std::cout << "Total output tokens: " << dataset.m_total_output_len << std::endl;
+    std::cout << "Average input len: " << dataset.get_average_input_len() << " tokens" << std::endl;
+    std::cout << "Average output len: " << dataset.get_average_output_len() << " tokens" << std::endl;
+    std::cout << "Total execution time secs: " << total_time_in_ms / 1000. << " secs" << std::endl;
+    std::cout << "Tput: " << (dataset.m_total_input_len + dataset.m_total_output_len) / (total_time_in_ms / 1000.) << " tokens / sec " << std::endl << std::endl;
+}
 
 int main(int argc, char* argv[]) try {
     //
@@ -376,6 +387,7 @@ int main(int argc, char* argv[]) try {
     ("max_input_len", "Max input length take from dataset", cxxopts::value<size_t>()->default_value("1024"))
     ("max_output_len", "Max output length", cxxopts::value<size_t>()->default_value("2048"))
     ("request_rate", "Number of requests per second. If this is inf, then all the requests are sent at time 0. Otherwise, we use Poisson process to synthesize the request arrival times.", cxxopts::value<std::string>()->default_value("inf"))
+    ("new_metrics", "Start metrics gathering thread.", cxxopts::value<bool>()->default_value("true"))
     ("h,help", "Print usage");
 
     cxxopts::ParseResult result;
@@ -400,6 +412,7 @@ int main(int argc, char* argv[]) try {
     const size_t max_input_len = result["max_input_len"].as<size_t>();
     const size_t max_output_len = result["max_output_len"].as<size_t>();
     const std::string request_rate = result["request_rate"].as<std::string>();
+    const bool new_metrics = result["new_metrics"].as<bool>();
 
     // Create requests for generation
     Dataset dataset = filtered_dataset(models_path, dataset_path, num_prompts, max_input_len, max_output_len);
@@ -434,13 +447,30 @@ int main(int argc, char* argv[]) try {
 
     GenerationInfoCollector generation_info_collector;
 
-    std::thread lmmEngineThread(llmEngineLoop, &pipe, &dataset);
-    std::thread statisticsReporterThread(statisticsReporter, &generation_info_collector, num_prompts);
-    std::thread trafficSimulatorThread(trafficSimulator, &pipe, &dataset, request_rate, &generation_info_collector);
+    if (!new_metrics) {
+        std::cout << "Disabling new metrics" << std::endl;
+        generation_info_collector.gatherStatistics = false;
+    }
 
-    trafficSimulatorThread.join();
+    AutoStartTimer timer;
+    std::thread lmmEngineThread(llmEngineLoop, &pipe, &dataset);
+    std::thread trafficSimulatorThread(trafficSimulator, &pipe, &dataset, request_rate, &generation_info_collector);
+    if (request_rate == "inf") {
+        std::cout << "Waiting until all traffic requests are added to the queue..." << std::endl;
+        trafficSimulatorThread.join();
+    }
+
+    std::thread statisticsReporterThread(statisticsReporter, &generation_info_collector, num_prompts);
+
+    if (request_rate != "inf") {
+        trafficSimulatorThread.join();
+    }
     statisticsReporterThread.join();
     lmmEngineThread.join();
+
+    double total_time_in_ms = timer.current_in_milli();
+
+    printDefaultStatistics(total_time_in_ms, dataset);
 
     std::cout << "Benchmark finished" << std::endl;
 } catch (const std::exception& error) {
