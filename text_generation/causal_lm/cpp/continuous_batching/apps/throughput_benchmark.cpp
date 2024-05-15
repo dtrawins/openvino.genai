@@ -387,7 +387,7 @@ int main(int argc, char* argv[]) try {
     ("max_input_len", "Max input length take from dataset", cxxopts::value<size_t>()->default_value("1024"))
     ("max_output_len", "Max output length", cxxopts::value<size_t>()->default_value("2048"))
     ("request_rate", "Number of requests per second. If this is inf, then all the requests are sent at time 0. Otherwise, we use Poisson process to synthesize the request arrival times.", cxxopts::value<std::string>()->default_value("inf"))
-    ("new_metrics", "Start metrics gathering thread.", cxxopts::value<bool>()->default_value("true"))
+    ("disable_new_metrics", "Do not start metrics gathering thread.", cxxopts::value<bool>()->default_value("false"))
     ("h,help", "Print usage");
 
     cxxopts::ParseResult result;
@@ -412,7 +412,7 @@ int main(int argc, char* argv[]) try {
     const size_t max_input_len = result["max_input_len"].as<size_t>();
     const size_t max_output_len = result["max_output_len"].as<size_t>();
     const std::string request_rate = result["request_rate"].as<std::string>();
-    const bool new_metrics = result["new_metrics"].as<bool>();
+    const bool disable_new_metrics = result["disable_new_metrics"].as<bool>();
 
     // Create requests for generation
     Dataset dataset = filtered_dataset(models_path, dataset_path, num_prompts, max_input_len, max_output_len);
@@ -447,7 +447,7 @@ int main(int argc, char* argv[]) try {
 
     GenerationInfoCollector generation_info_collector;
 
-    if (!new_metrics) {
+    if (disable_new_metrics) {
         std::cout << "Disabling new metrics" << std::endl;
         generation_info_collector.gatherStatistics = false;
     }
