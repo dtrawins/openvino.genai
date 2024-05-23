@@ -3,7 +3,12 @@
 import os
 import pytest
 
-from common import run_test_pipeline, get_models_list, get_model_and_tokenizer, save_ov_model_from_optimum, generate_and_compare_with_reference_text, get_greedy, get_beam_search, get_multinomial_temperature, get_multinomial_temperature_and_top_k, get_multinomial_temperature_and_top_p, get_multinomial_temperature_top_p_and_top_k, DEFAULT_SCHEDULER_CONFIG
+from common import (run_test_pipeline, get_models_list, get_model_and_tokenizer, save_ov_model_from_optimum, 
+                    generate_and_compare_with_reference_text, get_greedy, get_beam_search, get_multinomial_temperature,
+                    get_multinomial_temperature_and_top_k, get_multinomial_temperature_and_top_p, 
+                    get_multinomial_temperature_top_p_and_top_k, get_scheduler_config, 
+                    run_continuous_batching, run_hugging_face, compare_results, _generate_and_compare_with_hf, 
+                    DEFAULT_SCHEDULER_CONFIG)
 from dataclasses import dataclass
 from py_continuous_batching import GenerationConfig, GenerationResult
 from pathlib import Path
@@ -42,10 +47,15 @@ def test_eos_beam_search(tmp_path):
     prompts = ["Tell me something about Canada"]
     generation_configs = [get_beam_search()]
     scheduler_config = get_scheduler_config()
+    use_optimum = True
+    model_path : Path = tmp_path / model_id
+    model, hf_tokenizer = get_model_and_tokenizer(model_id, use_optimum)
 
-    (hf_results, model_path) = run_hugging_face(model_id=model_id, prompts=prompts,
-                                                generation_configs=generation_configs, tmp_path=tmp_path,
-                                                use_optimum=True)
+    if use_optimum:
+        save_ov_model_from_optimum(model, hf_tokenizer, model_path)
+
+    hf_results = run_hugging_face(model=model, hf_tokenizer=hf_tokenizer, prompts=prompts, generation_configs=generation_configs)
+
     ov_results: List[GenerationResult] = run_continuous_batching(model_path=model_path, scheduler_config=scheduler_config,
                                                                  prompts=prompts, generation_configs=generation_configs)
 
@@ -53,7 +63,7 @@ def test_eos_beam_search(tmp_path):
     assert len(prompts) == len(ov_results)
 
     for prompt, hf_result, ov_result, generation_config in zip(prompts, hf_results, ov_results, generation_configs):
-        print(f"Prompt = {prompt}\nHF result = {hf_result}\nOV result = {ov_result}")
+        print(f"Prompt = {prompt}\nHF result = {hf_result}\nOV result = {ov_result.m_generation_ids}")
         compare_results(hf_result, ov_result, generation_config)
 
 
@@ -70,10 +80,15 @@ def test_eos_greedy(tmp_path):
     prompts = ["What is OpenVINO?"]
     generation_configs = [get_greedy()]
     scheduler_config = get_scheduler_config()
+    use_optimum = True
+    model_path : Path = tmp_path / model_id
+    model, hf_tokenizer = get_model_and_tokenizer(model_id, use_optimum)
 
-    (hf_results, model_path) = run_hugging_face(model_id=model_id, prompts=prompts,
-                                                generation_configs=generation_configs, tmp_path=tmp_path,
-                                                use_optimum=True)
+    if use_optimum:
+        save_ov_model_from_optimum(model, hf_tokenizer, model_path)
+
+    hf_results = run_hugging_face(model=model, hf_tokenizer=hf_tokenizer, prompts=prompts, generation_configs=generation_configs)
+
     ov_results: List[GenerationResult] = run_continuous_batching(model_path=model_path, scheduler_config=scheduler_config,
                                                                  prompts=prompts, generation_configs=generation_configs)
 
@@ -81,7 +96,7 @@ def test_eos_greedy(tmp_path):
     assert len(prompts) == len(ov_results)
 
     for prompt, hf_result, ov_result, generation_config in zip(prompts, hf_results, ov_results, generation_configs):
-        print(f"Prompt = {prompt}\nHF result = {hf_result}\nOV result = {ov_result}")
+        print(f"Prompt = {prompt}\nHF result = {hf_result}\nOV result = {ov_result.m_generation_ids}")
         compare_results(hf_result, ov_result, generation_config)
 
 @pytest.mark.parametrize("generation_config", [get_greedy(), get_beam_search()],
