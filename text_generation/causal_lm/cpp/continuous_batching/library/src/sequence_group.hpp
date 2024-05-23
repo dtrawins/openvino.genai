@@ -375,8 +375,8 @@ public:
                     m_generation_stream->push(outputs);
                 }
             }
-        // For greedy sampling we decide whever to stream partial results depending on the user parameter
-        } else if (m_sampling_params.is_greedy_sampling()) {
+        // For greedy or multinomial sampling we decide whever to stream partial results depending on the user parameter
+        } else if (m_sampling_params.is_greedy_sampling() || m_sampling_params.is_multinomial()) {
             // TO DO: Now we always stream for greedy search for the sake of benchmarking
             if (true /* m_sampling_params.stream */) {
                 // If sequence group has been preempted we skip retriving the results as seqeunce tokens have not been cleared and
