@@ -9,7 +9,7 @@ RUN git clone https://github.com/openvinotoolkit/openvino.git && \
     cd /workspace/openvino && \
     git submodule update --init -- /workspace/openvino/thirdparty/xbyak /workspace/openvino/thirdparty/pugixml /workspace/openvino/thirdparty/open_model_zoo \
         /workspace/openvino/thirdparty/protobuf /workspace/openvino/thirdparty/snappy /workspace/openvino/thirdparty/telemetry /workspace/openvino/src/plugins/intel_cpu/thirdparty/mlas \
-        /workspace/openvino/src/plugins/intel_cpu/thirdparty/onednn && cd -
+        /workspace/openvino/src/plugins/intel_cpu/thirdparty/onednn /workspace/openvino/src/bindings/python/thirdparty/pybind11 && cd -
 
 RUN /workspace/openvino/install_build_dependencies.sh
 RUN python3 -m pip install -r /workspace/openvino/src/bindings/python/wheel/requirements-dev.txt

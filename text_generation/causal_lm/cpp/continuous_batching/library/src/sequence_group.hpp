@@ -376,7 +376,7 @@ public:
                 }
             }
         // For greedy sampling we decide whever to stream partial results depending on the user parameter
-        } else if (m_sampling_params.is_gready_sampling()) {
+        } else if (m_sampling_params.is_greedy_sampling()) {
             // TO DO: Now we always stream for greedy search for the sake of benchmarking
             if (true /* m_sampling_params.stream */) {
                 // If sequence group has been preempted we skip retriving the results as seqeunce tokens have not been cleared and
