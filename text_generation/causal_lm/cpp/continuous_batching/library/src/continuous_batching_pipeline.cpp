@@ -93,6 +93,7 @@ public:
     }
 
     GenerationHandle add_request(uint64_t request_id, std::string prompt, GenerationConfig sampling_params) {
+        std::cout << "entering add_request" << std::endl;
         if (sampling_params.eos_token_id < 0) {
             sampling_params.eos_token_id = m_tokenizer->get_eos_token_id();
         } else {
@@ -102,19 +103,25 @@ public:
         }
 
         ov::Tensor input_ids;
+        std::cout << "add_request tokenizing..." << std::endl;
         {
-            static ManualTimer timer("tokenize");
-            timer.start();
+            //static ManualTimer timer("tokenize");
+            //timer.start();
             input_ids = m_tokenizer->encode(prompt);
-            timer.end();
+            //timer.end();
         }
+
+        std::cout << "add_request tokenized" << std::endl;
 
         SequenceGroup::Ptr sequence_group = std::make_shared<SequenceGroup>(request_id, input_ids,
                                                                             sampling_params, m_scheduler->get_config().block_size);
         {
+            std::cout << "add_request acquiring lock..." << std::endl;
             std::lock_guard<std::mutex> lock{m_mutex};
+            std::cout << "add_request lock acquired" << std::endl;
             m_awaiting_requests.push_back(sequence_group);
         }
+        std::cout << "add_request lock released" << std::endl;
         return std::make_unique<GenerationHandleImpl>(sequence_group->get_generation_stream(), sampling_params);
     }
 
@@ -125,9 +132,12 @@ public:
             m_requests.end());
         
         // Pull awaiting requests
+        //std::cout << "update_requests_buffer acquiring lock..." << std::endl;
         std::lock_guard<std::mutex> lock{m_mutex};
+        //std::cout << "update_requests_buffer lock acquired" << std::endl;
         m_requests.insert(m_requests.end(), m_awaiting_requests.begin(), m_awaiting_requests.end());
         m_awaiting_requests.clear();
+        //std::cout << "update_requests_buffer lock released" << std::endl;
     }
 
     void step() {

@@ -2,14 +2,17 @@
 // Copyright (C) 2023-2024 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 
+#include <mutex>
 #include "openvino/runtime/core.hpp"
 
 #include "tokenizer.hpp"
 
 class Tokenizer::Impl {
     const size_t TOKENIZER_BATCH_SIZE = 1;
-    ov::CompiledModel m_tokenizer, m_detokenizer;
+    //ov::CompiledModel m_tokenizer, m_detokenizer;
+    ov::InferRequest m_tokenizer, m_detokenizer;
     std::size_t m_eos_token_id;
+    std::mutex m_mutex; // protecting parallel infer request creation
 
 public:
     explicit Impl(const std::string& models_path) {
@@ -23,23 +26,27 @@ public:
 
         // tokenizer and detokenizer work on CPU only
         m_tokenizer = core.compile_model(
-            tokenizer_model, "CPU");
+            tokenizer_model, "CPU").create_infer_request();
         m_detokenizer = core.compile_model(
-            models_path + "/openvino_detokenizer.xml", "CPU");
+            models_path + "/openvino_detokenizer.xml", "CPU").create_infer_request();
     }
 
     ov::Tensor encode(std::string prompt) {
-        auto tokenizer_infer_request = m_tokenizer.create_infer_request();
-        tokenizer_infer_request.set_input_tensor(ov::Tensor{ov::element::string, {TOKENIZER_BATCH_SIZE}, &prompt});
-        tokenizer_infer_request.infer();
-        return tokenizer_infer_request.get_tensor("input_ids");
+        std::unique_lock<std::mutex> lock(m_mutex);
+        std::cout << "encode creates infer request" << std::endl;
+        std::cout << "encode infer request created, running infer" << std::endl;
+        m_tokenizer.set_input_tensor(ov::Tensor{ov::element::string, {TOKENIZER_BATCH_SIZE}, &prompt});
+        m_tokenizer.infer();
+        std::cout << "encode infer finished" << std::endl;
+        return m_tokenizer.get_tensor("input_ids");
     }
 
     std::string decode(std::vector<int64_t> tokens) {
-        auto detokenizer_infer_request = m_detokenizer.create_infer_request();
-        detokenizer_infer_request.set_input_tensor(ov::Tensor{ov::element::i64, {TOKENIZER_BATCH_SIZE, tokens.size()}, tokens.data()});
-        detokenizer_infer_request.infer();
-        return detokenizer_infer_request.get_output_tensor().data<std::string>()[0];
+        std::unique_lock<std::mutex> lock(m_mutex);
+        // auto detokenizer_infer_request = m_detokenizer.create_infer_request();
+        m_detokenizer.set_input_tensor(ov::Tensor{ov::element::i64, {TOKENIZER_BATCH_SIZE, tokens.size()}, tokens.data()});
+        m_detokenizer.infer();
+        return m_detokenizer.get_output_tensor().data<std::string>()[0];
     }
 
     size_t get_eos_token_id() const {
