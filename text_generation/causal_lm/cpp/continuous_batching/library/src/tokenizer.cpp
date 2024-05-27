@@ -8,6 +8,7 @@
 
 #include "tokenizer.hpp"
 
+/*
 class InferenceRunner {
 
 public:
@@ -76,27 +77,51 @@ public:
         return output;
     }
 };
+*/
 
 class Tokenizer::Impl {
     const size_t TOKENIZER_BATCH_SIZE = 1;
-    TokenizerRunner m_tokenizer;
-    DetokenizerRunner m_detokenizer;
+    //TokenizerRunner m_tokenizer;
+    //DetokenizerRunner m_detokenizer;
+    ov::InferRequest m_tokenizer;
+    ov::InferRequest m_detokenizer;
     std::size_t m_eos_token_id;
+    // TODO: Using multiple infer requests hang. For now we synchronize entire execution.
+    std::mutex m_tokenizer_mutex;
+    std::mutex m_detokenizer_mutex;
 
 public:
-    explicit Impl(const std::string& models_path) : 
+    explicit Impl(const std::string& models_path) /*: 
         m_tokenizer(models_path + "/openvino_tokenizer.xml"),
-        m_detokenizer(models_path + "/openvino_detokenizer.xml")
+        m_detokenizer(models_path + "/openvino_detokenizer.xml") */
     {
-        m_eos_token_id = m_tokenizer.get_eos_token_id();
+        ov::Core core;
+        core.add_extension(OPENVINO_TOKENIZERS_PATH);  // OPENVINO_TOKENIZERS_PATH is defined in CMakeLists.txt
+
+        std::shared_ptr<ov::Model> tokenizer_model = core.read_model(models_path + "/openvino_tokenizer.xml");
+        const ov::AnyMap& rt_info = tokenizer_model->get_rt_info();
+        OPENVINO_ASSERT(rt_info.find("eos_token_id") != rt_info.end(), "Failed to detect \"eos_token_id\" in openvino_tokenizer.xml runtime information");
+        m_eos_token_id = rt_info.at("eos_token_id").as<int64_t>();
+
+        // tokenizer and detokenizer work on CPU only
+        m_tokenizer = core.compile_model(
+            tokenizer_model, "CPU").create_infer_request();
+        m_detokenizer = core.compile_model(
+            models_path + "/openvino_detokenizer.xml", "CPU").create_infer_request();
     }
 
     ov::Tensor encode(std::string prompt) {
-        return m_tokenizer.run(prompt);
+        std::unique_lock<std::mutex> lock(m_tokenizer_mutex);
+        m_tokenizer.set_input_tensor(ov::Tensor{ov::element::string, {TOKENIZER_BATCH_SIZE}, &prompt});
+        m_tokenizer.infer();
+        return m_tokenizer.get_tensor("input_ids");
     }
 
     std::string decode(std::vector<int64_t> tokens) {
-        return m_detokenizer.run(tokens);
+        std::unique_lock<std::mutex> lock(m_detokenizer_mutex);
+        m_detokenizer.set_input_tensor(ov::Tensor{ov::element::i64, {TOKENIZER_BATCH_SIZE, tokens.size()}, tokens.data()});
+        m_detokenizer.infer();
+        return m_detokenizer.get_output_tensor().data<std::string>()[0];
     }
 
     size_t get_eos_token_id() const {
