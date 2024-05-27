@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include <mutex>
+#include <memory>
 
 #include "continuous_batching_pipeline.hpp"
 #include "cache_manager.hpp"
@@ -114,10 +115,16 @@ public:
             std::lock_guard<std::mutex> lock{m_mutex};
             m_awaiting_requests.push_back(sequence_group);
         }
-        return GenerationHandle(sequence_group->get_generation_stream(), sampling_params);
+        return std::make_unique<GenerationHandleImpl>(sequence_group->get_generation_stream(), sampling_params);
     }
 
-    void pull_awaiting_requests() {
+    void update_requests_buffer() {
+        // Remove sequence group if it's handle has been dropped
+        m_requests.erase(std::remove_if(m_requests.begin(), m_requests.end(),
+            [](const SequenceGroup::Ptr & request) { return request->handle_dropped(); }),
+            m_requests.end());
+        
+        // Pull awaiting requests
         std::lock_guard<std::mutex> lock{m_mutex};
         m_requests.insert(m_requests.end(), m_awaiting_requests.begin(), m_awaiting_requests.end());
         m_awaiting_requests.clear();
@@ -127,7 +134,7 @@ public:
         static ManualTimer step_timer("step()");
         step_timer.start();
 
-        pull_awaiting_requests();
+        update_requests_buffer();
 
         Scheduler::Output scheduler_output;
         {
@@ -235,7 +242,7 @@ public:
         for (auto& generation : generations) {
             GenerationResult result;
             result.m_request_id = 1;
-            std::vector<GenerationOutput> generation_outputs = generation.read_all();
+            std::vector<GenerationOutput> generation_outputs = generation->read_all();
 
             std::sort(generation_outputs.begin(), generation_outputs.end(), [=] (GenerationOutput& r1, GenerationOutput& r2) {
                 return r1.score > r2.score;

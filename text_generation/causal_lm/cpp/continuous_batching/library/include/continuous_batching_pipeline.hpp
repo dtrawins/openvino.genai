@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <memory>
 #include <openvino/openvino.hpp>
 
 #include "scheduler_config.hpp"

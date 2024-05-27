@@ -19,6 +19,7 @@ using TokenIds = std::vector<int64_t>;
 using IterationOutput = std::pair<int64_t, int64_t>;
 
 class Sequence {
+    // This can be a problem if we launch two pipelines in the same application.
     static uint64_t _get_next_global_sequence_id() {
         static uint64_t m_counter = 0;
         return m_counter++;
@@ -353,6 +354,10 @@ public:
 
     void finish_generation_stream() {
         m_generation_stream->finish_generation_stream();
+    }
+
+    bool handle_dropped() {
+        return m_generation_stream->handle_dropped();
     }
 
     void notify_handle() {

@@ -6,15 +6,19 @@
 #include "generation_handle.hpp"
 #include "generation_stream.hpp"
 
-bool GenerationHandle::generation_finished() {
+GenerationHandleImpl::~GenerationHandleImpl() {
+    m_generation_stream->drop();
+}
+
+bool GenerationHandleImpl::generation_finished() {
     return m_generation_stream->generation_finished();
 }
 
-bool GenerationHandle::can_read() {
+bool GenerationHandleImpl::can_read() {
     return m_generation_stream->can_read();
 }
 
-std::unordered_map<uint64_t, GenerationOutput> GenerationHandle::read() {
+std::unordered_map<uint64_t, GenerationOutput> GenerationHandleImpl::read() {
     return m_generation_stream->read();
 }
 
@@ -31,7 +35,7 @@ void add_partial_result(std::unordered_map<uint64_t, GenerationOutput>& partial_
     }
 }
 
-std::vector<GenerationOutput> GenerationHandle::read_all() {
+std::vector<GenerationOutput> GenerationHandleImpl::read_all() {
     std::vector<GenerationOutput> results;
     std::unordered_map<uint64_t, GenerationOutput> partial_results;
     while (!generation_finished() || can_read()) {

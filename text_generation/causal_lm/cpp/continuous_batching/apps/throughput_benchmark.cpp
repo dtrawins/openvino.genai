@@ -184,10 +184,9 @@ class GenerationInfo {
     size_t input_len;
 
 public:
-    GenerationInfo(GenerationHandle generation_handle, size_t input_len) : 
-    generation_handle(generation_handle),
-    input_len(input_len)
+    GenerationInfo(GenerationHandle generation_handle, size_t input_len) : input_len(input_len)
     {
+        this->generation_handle = std::move(generation_handle);
         start_time = std::chrono::steady_clock::now();
     }
 
@@ -204,15 +203,15 @@ public:
     }
 
     GenerationOutputs read() {
-        return generation_handle.read();
+        return generation_handle->read();
     }
 
     bool can_read() {
-        return generation_handle.can_read();
+        return generation_handle->can_read();
     }
 
     bool is_finished() {
-        return generation_handle.generation_finished();
+        return generation_handle->generation_finished();
     }
 
     void set_inactive() {
@@ -249,9 +248,10 @@ public:
         this->start_time = start_time;
     }
 
-    void add_generation_info(GenerationInfo generation_info) {
+    void add_generation(ContinuousBatchingPipeline* pipe, Dataset* dataset, size_t request_id) {
+        GenerationHandle generation_handle = pipe->add_request(request_id, dataset->m_prompts[request_id], dataset->m_sampling_params[request_id]);
         std::lock_guard<std::mutex> lock(mutex);
-        generations_info.emplace_back(generation_info);
+        generations_info.emplace_back(std::move(generation_handle), dataset->m_input_lens[request_id]);
     }
 
     int run() {
@@ -325,8 +325,7 @@ void trafficSimulator(ContinuousBatchingPipeline* pipe, Dataset* dataset, std::s
     generation_info_collector->set_start_time(std::chrono::steady_clock::now());
     for (size_t request_id = 0; request_id < dataset->size(); ++request_id) {
         std::cout << "Traffic thread adding request to the queue..." << std::endl;
-        GenerationHandle generation_handle = pipe->add_request(request_id, dataset->m_prompts[request_id], dataset->m_sampling_params[request_id]);
-        generation_info_collector->add_generation_info(GenerationInfo(generation_handle, dataset->m_input_lens[request_id]));
+        generation_info_collector->add_generation(pipe, dataset, request_id);
         if (numeric_request_rate > 0)
             std::this_thread::sleep_for(std::chrono::milliseconds(int(distribution(gen) * 1000)));
     }
@@ -405,7 +404,7 @@ int main(int argc, char* argv[]) try {
     // Perform the first inference
     SchedulerConfig scheduler_config {
         .max_num_batched_tokens = max_batch_size,
-        .num_kv_blocks = 15000,
+        .num_kv_blocks = 1500,
         .block_size = 32,
         .dynamic_split_fuse = dynamic_split_fuse,
         .max_num_seqs = 256, // not used if dynamic_split_fuse=True

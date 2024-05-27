@@ -17,14 +17,20 @@ using GenerationOutputs = std::unordered_map<uint64_t, GenerationOutput>;
 
 class GenerationStream;
 
-class GenerationHandle {
+class GenerationHandleImpl {
     std::shared_ptr<GenerationStream> m_generation_stream;
     GenerationConfig m_sampling_params;
  
 public:
-    GenerationHandle(std::shared_ptr<GenerationStream> generation_stream, const GenerationConfig& sampling_params) :
+    GenerationHandleImpl(std::shared_ptr<GenerationStream> generation_stream, const GenerationConfig& sampling_params) :
     m_generation_stream(generation_stream),
     m_sampling_params(sampling_params) {};
+
+    ~GenerationHandleImpl();
+
+    // There can be only one handle for a request
+    GenerationHandleImpl(const GenerationHandleImpl&) = delete;
+    GenerationHandleImpl& operator=(const GenerationHandleImpl&) = delete;
 
     bool generation_finished();
 
@@ -35,3 +41,5 @@ public:
     // Reads all generated tokens for all sequences
     std::vector<GenerationOutput> read_all();
 };
+
+using GenerationHandle = std::unique_ptr<GenerationHandleImpl>;

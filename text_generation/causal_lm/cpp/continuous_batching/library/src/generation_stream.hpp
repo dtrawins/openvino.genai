@@ -3,12 +3,14 @@
 
 #pragma once
 #include <mutex>
+#include <atomic>
 #include "synchronized_queue.hpp"
 #include "generation_handle.hpp"
 
 
 class GenerationStream {
     std::mutex m_mutex;
+    bool m_handle_dropped = false;
     bool m_generation_finished = false;
     SynchronizedQueue<GenerationOutputs> m_output_queue;
 
@@ -45,5 +47,15 @@ public:
     bool generation_finished() {
         std::lock_guard<std::mutex> lock(m_mutex);
         return m_generation_finished;
+    }
+
+    void drop() {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_handle_dropped = true;
+    }
+
+    bool handle_dropped() {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return m_handle_dropped;
     }
 };
