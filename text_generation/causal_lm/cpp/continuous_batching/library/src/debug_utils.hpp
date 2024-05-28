@@ -97,23 +97,30 @@ static std::string get_openvino_tokenizer_path(std::string input_path) {
         input_path = join_path({input_path, LIB_NAME});
     }
 
-    if (std::filesystem::exists(input_path))
-        return input_path;
+    try {
+        if (std::filesystem::exists(input_path))
+            return input_path;
+    } catch (const std::exception& e) {}
     
-    for (auto& env_var: search_order) {
-        std::string env_val = std::string(std::getenv(env_var.c_str()));
-        if (env_val == "")
-            continue;
-        
-        std::vector<std::string> paths = split(env_val, DELIM);
-        for (auto& path: paths) {
-            if (is_path_escaped(path))
-                return "";
+    try {
+        for (auto& env_var: search_order) {
+            std::string env_val = std::string(std::getenv(env_var.c_str()));
+            if (env_val == "")
+                continue;
+            
+            std::vector<std::string> paths = split(env_val, DELIM);
+            for (auto& path: paths) {
+                if (is_path_escaped(path))
+                    return "";
 
-            input_path = join_path({path, LIB_NAME});
-            if (std::filesystem::exists(input_path))
-                return input_path;
+                input_path = join_path({path, LIB_NAME});
+                if (std::filesystem::exists(input_path))
+                    return input_path;
+            }
         }
+    } catch (const std::exception& e) {
+        std::cout << input_path << " get_openvino_tokenizer_path exception: " << e.what() << std::endl;
+        return LIB_NAME;
     }
 
     return LIB_NAME;
