@@ -3,8 +3,11 @@
 
 #pragma once
 
+#include <filesystem>
 #include <string>
 #include <iostream>
+#include <sstream>
+#include <vector>
 
 #include <openvino/runtime/tensor.hpp>
 
@@ -28,4 +31,85 @@ void print_tensor(std::string name, ov::Tensor tensor) {
     } else if (tensor.get_element_type() == ov::element::boolean) {
         print_array(tensor.data<bool>(), tensor.get_size());
     }
+}
+
+static std::vector<std::string> split(const std::string &input, char delim) {
+    std::vector<std::string> result;
+    std::stringstream ss (input);
+    std::string item;
+
+    while (getline (ss, item, delim)) {
+        result.push_back (item);
+    }
+
+    return result;
+}
+
+static std::string join_path(std::initializer_list<std::string> segments) {
+        std::string joined;
+
+        for (const auto& seg : segments) {
+            if (joined.empty()) {
+                joined = seg;
+            } else if (isAbsolutePath(seg)) {
+                if (joined[joined.size() - 1] == '/') {
+                    joined.append(seg.substr(1));
+                } else {
+                    joined.append(seg);
+                }
+            } else {
+                if (joined[joined.size() - 1] != '/') {
+                    joined.append("/");
+                }
+                joined.append(seg);
+            }
+        }
+
+        return joined;
+    }
+
+static bool is_path_escaped(const std::string& path) {
+    std::size_t lhs = path.find("../");
+    std::size_t rhs = path.find("/..");
+    return (std::string::npos != lhs && lhs == 0) || (std::string::npos != rhs && rhs == path.length() - 3) || std::string::npos != path.find("/../");
+}
+
+std::string get_openvino_tokenizer_path(std::string input_path) {
+    const std::string LIB_NAME = "libopenvino_tokenizers.so";
+    const char DELIM = ":";
+
+    std::vector<std::string> search_order = {"LD_PRELOAD", "LD_LIBRARY_PATH"};
+    
+    if (is_path_escaped(input_path))
+        return "";
+
+    if (input_path == "") {
+        std::filesystem::path cwd = std::filesystem::current_path();
+        input_path = join_path({cwd, LIB_NAME});
+    }
+
+    if (input_path.find(LIB_NAME) == std::string::npos) {
+        input_path = join_path({input_path, LIB_NAME});
+    }
+
+    if (fs::exists(input_path))
+        return input_path;
+    
+    for (auto& env_var: search_order) {
+        std::string env_val = std::string(std::getenv(env_var.c_str()));
+        if (env_val == "")
+            continue;
+        
+        std::vector<std::string> paths = split(env_val, DELIM);
+        for (auto& path: paths) {
+            if (is_path_escaped(path))
+                return "";
+
+            input_path = join_path({path, LIB_NAME});
+            if (fs::exists(input_path))
+                return input_path;
+        }
+    }
+
+    return LIB_NAME;
 }
