@@ -12,7 +12,7 @@
 #include <openvino/runtime/tensor.hpp>
 
 template <typename T>
-void print_array(T * array, size_t size) {
+static void print_array(T * array, size_t size) {
     std::cout << " => [ ";
     for (size_t i = 0; i < size; ++i) {
         std::cout << array[i] << " ";
@@ -20,7 +20,7 @@ void print_array(T * array, size_t size) {
     std::cout << " ] " << std::endl;
 }
 
-void print_tensor(std::string name, ov::Tensor tensor) {
+static void print_tensor(std::string name, ov::Tensor tensor) {
     std::cout << name;
     if (tensor.get_element_type() == ov::element::i32) {
         print_array(tensor.data<int>(), tensor.get_size());
@@ -45,13 +45,17 @@ static std::vector<std::string> split(const std::string &input, char delim) {
     return result;
 }
 
+static bool is_absolute_path(const std::string& path) {
+    return !path.empty() && (path[0] == '/');
+}
+
 static std::string join_path(std::initializer_list<std::string> segments) {
         std::string joined;
 
         for (const auto& seg : segments) {
             if (joined.empty()) {
                 joined = seg;
-            } else if (isAbsolutePath(seg)) {
+            } else if (is_absolute_path(seg)) {
                 if (joined[joined.size() - 1] == '/') {
                     joined.append(seg.substr(1));
                 } else {
@@ -74,9 +78,9 @@ static bool is_path_escaped(const std::string& path) {
     return (std::string::npos != lhs && lhs == 0) || (std::string::npos != rhs && rhs == path.length() - 3) || std::string::npos != path.find("/../");
 }
 
-std::string get_openvino_tokenizer_path(std::string input_path) {
+static std::string get_openvino_tokenizer_path(std::string input_path) {
     const std::string LIB_NAME = "libopenvino_tokenizers.so";
-    const char DELIM = ":";
+    const char DELIM = ':';
 
     std::vector<std::string> search_order = {"LD_PRELOAD", "LD_LIBRARY_PATH"};
     
@@ -89,10 +93,10 @@ std::string get_openvino_tokenizer_path(std::string input_path) {
     }
 
     if (input_path.find(LIB_NAME) == std::string::npos) {
-        input_path = join_path({input_path, LIB_NAME});
+        input_path = join_path({{input_path}, {LIB_NAME}});
     }
 
-    if (fs::exists(input_path))
+    if (std::filesystem::exists(input_path))
         return input_path;
     
     for (auto& env_var: search_order) {
@@ -106,7 +110,7 @@ std::string get_openvino_tokenizer_path(std::string input_path) {
                 return "";
 
             input_path = join_path({path, LIB_NAME});
-            if (fs::exists(input_path))
+            if (std::filesystem::exists(input_path))
                 return input_path;
         }
     }
