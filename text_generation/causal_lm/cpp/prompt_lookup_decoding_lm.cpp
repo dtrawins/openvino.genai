@@ -177,6 +177,7 @@ int main(int argc, char* argv[]) try {
 
     // tokenizer model
     ov::Core core;
+    std::cout << "prompt lookup.cpp" << std::endl;
     core.add_extension(OPENVINO_TOKENIZERS_PATH);  // OPENVINO_TOKENIZERS_PATH is defined in CMakeLists.txt
 
     const std::string model_dir = std::string{argv[1]};

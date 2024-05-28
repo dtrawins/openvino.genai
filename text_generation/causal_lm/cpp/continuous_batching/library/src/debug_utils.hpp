@@ -82,6 +82,7 @@ static std::string get_openvino_tokenizer_path(std::string input_path) {
     const std::string LIB_NAME = "libopenvino_tokenizers.so";
     const char DELIM = ':';
 
+    std::cout << "get_openvino_tokenizer_path" << std::endl;
     std::vector<std::string> search_order = {"LD_PRELOAD", "LD_LIBRARY_PATH"};
     
     if (is_path_escaped(input_path))
@@ -93,7 +94,7 @@ static std::string get_openvino_tokenizer_path(std::string input_path) {
     }
 
     if (input_path.find(LIB_NAME) == std::string::npos) {
-        input_path = join_path({{input_path}, {LIB_NAME}});
+        input_path = join_path({input_path, LIB_NAME});
     }
 
     if (std::filesystem::exists(input_path))

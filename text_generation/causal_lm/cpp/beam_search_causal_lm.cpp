@@ -153,6 +153,7 @@ int main(int argc, char* argv[]) try {
 
     // Compile models
     ov::Core core;
+    std::cout << "beam search causal lm.cpp" << std::endl;
     core.add_extension(OPENVINO_TOKENIZERS_PATH);  // OPENVINO_TOKENIZERS_PATH is defined in CMakeLists.txt
     // Read the tokenizer model information from the file to later get the runtime information
     auto tokenizer_model = core.read_model(std::string{argv[1]} + "/openvino_tokenizer.xml");

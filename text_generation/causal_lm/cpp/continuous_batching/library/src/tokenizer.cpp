@@ -96,6 +96,7 @@ public:
         m_tokenizer(models_path + "/openvino_tokenizer.xml"),
         m_detokenizer(models_path + "/openvino_detokenizer.xml") */
     {
+        std::cout << "tokenizer.cpp" << std::endl;
         ov::Core core;
         core.add_extension(get_openvino_tokenizer_path(OPENVINO_TOKENIZERS_PATH));  // OPENVINO_TOKENIZERS_PATH is defined in CMakeLists.txt
 
