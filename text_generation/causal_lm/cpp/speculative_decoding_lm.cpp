@@ -218,7 +218,6 @@ int main(int argc, char* argv[]) try {
 
     // tokenizer model
     ov::Core core;
-    std::cout << "speculative.cpp" << std::endl;
     core.add_extension(OPENVINO_TOKENIZERS_PATH);  // OPENVINO_TOKENIZERS_PATH is defined in CMakeLists.txt
     auto tokenizer_model = core.read_model(std::string{argv[1]} + "/openvino_tokenizer.xml");
     // tokenizer and detokenizer work on CPU only

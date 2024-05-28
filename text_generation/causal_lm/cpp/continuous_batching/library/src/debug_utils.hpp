@@ -82,11 +82,12 @@ static std::string get_openvino_tokenizer_path(std::string input_path) {
     const std::string LIB_NAME = "libopenvino_tokenizers.so";
     const char DELIM = ':';
 
-    std::cout << "get_openvino_tokenizer_path" << std::endl;
     std::vector<std::string> search_order = {"LD_PRELOAD", "LD_LIBRARY_PATH"};
     
-    if (is_path_escaped(input_path))
+    if (is_path_escaped(input_path)) {
+        std::cout << input_path << "ERROR: get_openvino_tokenizer_path path is escaped: " << std::endl;
         return "";
+    }
 
     if (input_path == "") {
         std::filesystem::path cwd = std::filesystem::current_path();
@@ -100,7 +101,11 @@ static std::string get_openvino_tokenizer_path(std::string input_path) {
     try {
         if (std::filesystem::exists(input_path))
             return input_path;
-    } catch (const std::exception& e) {}
+    } catch (const std::exception& e) {
+        std::cout << input_path << "ERROR:  get_openvino_tokenizer_path exception: " << e.what() << std::endl;
+    } catch (...) {
+        std::cout << input_path << "ERROR:  get_openvino_tokenizer_path exception. " << std::endl;
+    }
     
     try {
         for (auto& env_var: search_order) {
@@ -119,9 +124,8 @@ static std::string get_openvino_tokenizer_path(std::string input_path) {
             }
         }
     } catch (const std::exception& e) {
-        std::cout << input_path << " get_openvino_tokenizer_path exception: " << e.what() << std::endl;
-        return LIB_NAME;
-    }
+        std::cout << input_path << "ERROR:  get_openvino_tokenizer_path exception: " << e.what() << std::endl;
+    } catch (...) {}
 
     return LIB_NAME;
 }
