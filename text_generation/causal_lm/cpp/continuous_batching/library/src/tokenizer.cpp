@@ -92,12 +92,12 @@ class Tokenizer::Impl {
     std::mutex m_detokenizer_mutex;
 
 public:
-    explicit Impl(const std::string& models_path) /*: 
+    explicit Impl(const std::string& models_path, const std::string& tokenizer_lib_path = {}) /*: 
         m_tokenizer(models_path + "/openvino_tokenizer.xml"),
         m_detokenizer(models_path + "/openvino_detokenizer.xml") */
     {
         ov::Core core;
-        core.add_extension(get_openvino_tokenizer_path(OPENVINO_TOKENIZERS_PATH));  // OPENVINO_TOKENIZERS_PATH is defined in CMakeLists.txt
+        core.add_extension(get_openvino_tokenizer_path(OPENVINO_TOKENIZERS_PATH, tokenizer_lib_path));  // OPENVINO_TOKENIZERS_PATH is defined in CMakeLists.txt
 
         std::shared_ptr<ov::Model> tokenizer_model = core.read_model(models_path + "/openvino_tokenizer.xml");
         const ov::AnyMap& rt_info = tokenizer_model->get_rt_info();
@@ -130,8 +130,8 @@ public:
     }
 };
 
-Tokenizer::Tokenizer(const std::string& models_path) {
-    m_impl = std::make_shared<Impl>(models_path);
+Tokenizer::Tokenizer(const std::string& models_path, const std::string& tokenizer_lib_path) {
+    m_impl = std::make_shared<Impl>(models_path, tokenizer_lib_path);
 }
 
 ov::Tensor Tokenizer::encode(std::string prompt) {

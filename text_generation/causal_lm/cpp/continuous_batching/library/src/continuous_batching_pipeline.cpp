@@ -55,9 +55,9 @@ class ContinuousBatchingPipeline::Impl {
     }
 
 public:
-    Impl(const std::string& models_path, const SchedulerConfig& scheduler_config) {
+    Impl(const std::string& models_path, const SchedulerConfig& scheduler_config, const std::string& tokenizer_lib_path = {}) {
         ov::Core core;
-        m_tokenizer = std::make_shared<Tokenizer>(models_path);
+        m_tokenizer = std::make_shared<Tokenizer>(models_path, tokenizer_lib_path);
 
         // The model can be compiled for GPU as well
         std::shared_ptr<ov::Model> model = core.read_model(models_path + "/openvino_model.xml");
@@ -262,8 +262,8 @@ public:
 };
 
 ContinuousBatchingPipeline::ContinuousBatchingPipeline(const std::string& models_path,
-                     const SchedulerConfig& scheduler_config) {
-    m_impl = std::make_shared<Impl>(models_path, scheduler_config);
+                     const SchedulerConfig& scheduler_config, const std::string& tokenizer_lib_path) {
+    m_impl = std::make_shared<Impl>(models_path, scheduler_config, tokenizer_lib_path);
 }
 
 std::shared_ptr<Tokenizer> ContinuousBatchingPipeline::get_tokenizer() {

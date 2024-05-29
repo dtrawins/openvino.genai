@@ -15,7 +15,7 @@ class Tokenizer {
     std::shared_ptr<Impl> m_impl;
 
 public:
-    explicit Tokenizer(const std::string& models_path);
+    explicit Tokenizer(const std::string& models_path, const std::string& tokenizer_lib_path = {});
 
     // note, that returned tensor is shared with internal state of InferRequest
     // so, it can be changed. Please, copy values
