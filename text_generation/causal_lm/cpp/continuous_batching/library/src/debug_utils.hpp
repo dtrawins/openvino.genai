@@ -81,18 +81,18 @@ static bool is_path_escaped(const std::string& path) {
 // Searching for libopenvino_tokenizers.so based on input paths
 // directory path or full file path can be provided
 // Search order:
-// backup_tokenizer_lib_path - passed during runtime - default ""
+// config_tokenizer_lib_path - passed during runtime - default ""
 // input_path - passed during compile time
 // LD_PRELOAD
 // LD_LIBRARY_PATH
-static std::string get_openvino_tokenizer_path(const std::string input_path, const std::string& backup_tokenizer_lib_path) {
+static std::string get_openvino_tokenizer_path(const std::string input_path, const std::string& config_tokenizer_lib_path) {
     const std::string LIB_NAME = "libopenvino_tokenizers.so";
     const char DELIM = ':';
-    std::string output_path = backup_tokenizer_lib_path;
+    std::string output_path = config_tokenizer_lib_path;
 
-    // backup_tokenizer_lib_path - passed during runtime - default ""
-    if (backup_tokenizer_lib_path.find(LIB_NAME) == std::string::npos) {
-        output_path = join_path({backup_tokenizer_lib_path, LIB_NAME});
+    // config_tokenizer_lib_path - passed during runtime - default ""
+    if (config_tokenizer_lib_path.find(LIB_NAME) == std::string::npos) {
+        output_path = join_path({config_tokenizer_lib_path, LIB_NAME});
     }
     try {
         if (std::filesystem::exists(output_path)) {
@@ -100,9 +100,9 @@ static std::string get_openvino_tokenizer_path(const std::string input_path, con
             return output_path;
         }
     } catch (const std::exception& e) {
-        std::cout << "WARNING: Path: " << backup_tokenizer_lib_path << std::endl << " get_openvino_tokenizer_path exception: " << e.what() << std::endl;
+        std::cout << "WARNING: Path: " << config_tokenizer_lib_path << std::endl << " get_openvino_tokenizer_path exception: " << e.what() << std::endl;
     } catch (...) {
-        std::cout << "WARNING: Path: " << backup_tokenizer_lib_path << std::endl << " get_openvino_tokenizer_path exception. " << std::endl;
+        std::cout << "WARNING: Path: " << config_tokenizer_lib_path << std::endl << " get_openvino_tokenizer_path exception. " << std::endl;
     }
     
     // input_path - passed during compile time
