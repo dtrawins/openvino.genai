@@ -109,7 +109,11 @@ static std::string get_openvino_tokenizer_path(std::string input_path) {
     
     
     for (auto& env_var: search_order) {
-        std::string env_val = std::string(std::getenv(env_var.c_str()));
+        auto env_char_val = std::getenv(env_var.c_str());
+        if (env_char_val == nullptr)
+            continue;
+
+        std::string env_val = std::string(env_char_val);
         std::cout << "DEBUG: env_val " << env_val << std::endl;
         if (env_val == "")
             continue;
