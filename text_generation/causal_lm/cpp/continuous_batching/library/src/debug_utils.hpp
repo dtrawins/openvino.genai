@@ -78,7 +78,7 @@ static bool is_path_escaped(const std::string& path) {
     return (std::string::npos != lhs && lhs == 0) || (std::string::npos != rhs && rhs == path.length() - 3) || std::string::npos != path.find("/../");
 }
 
-// Searchiung for libopenvino_tokenizers.so based on input paths
+// Searching for libopenvino_tokenizers.so based on input paths
 // directory path or full file path can be provided
 // Search order:
 // backup_tokenizer_lib_path - passed during runtime - default ""
