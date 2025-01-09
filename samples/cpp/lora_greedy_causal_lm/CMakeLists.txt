@@ -17,3 +17,16 @@ install(TARGETS lora_greedy_causal_lm
     RUNTIME DESTINATION samples_bin/
     COMPONENT samples_bin
     EXCLUDE_FROM_ALL)
+
+
+add_executable(lora_greedy_cb lora_greedy_cb.cpp)
+target_link_libraries(lora_greedy_cb PRIVATE openvino::genai)
+set_target_properties(lora_greedy_cb PROPERTIES
+    COMPILE_PDB_NAME lora_greedy_cb
+    # Ensure out of box LC_RPATH on macOS with SIP
+    INSTALL_RPATH_USE_LINK_PATH ON)
+target_compile_features(lora_greedy_cb PRIVATE cxx_std_11)
+install(TARGETS lora_greedy_cb
+    RUNTIME DESTINATION samples_bin/
+    COMPONENT samples_bin
+    EXCLUDE_FROM_ALL)
