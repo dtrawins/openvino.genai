@@ -627,10 +627,10 @@ void ContinuousBatchingPipeline::ContinuousBatchingImpl::_maybe_evict_cache_bloc
         OPENVINO_ASSERT(seq_group_ptr_it != m_requests.end(), "could not find sequence group with sequence ", seq_id);
         auto seq_group_ptr = *seq_group_ptr_it;
 
-         if (!seq_group_ptr->can_generate_tokens()) {
+         // if (!seq_group_ptr->can_generate_tokens()) {
              // do not evict during prefill
-             continue;
-         }
+         //    continue;
+         // }
 
         m_previous_num_blocks_before_eviction_per_sequence[seq_id] = seq_group_ptr->get_num_logical_blocks();
 
